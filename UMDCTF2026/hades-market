@@ -1,0 +1,232 @@
+# UMDCTF — 'hades-group'
+
+**Category:** OSINT
+**Flag:** `UMDCTF{REC-9305174}`
+
+## Overview
+
+This challenge presented a six-week export of a private Telegram group called "Hades Group," the back-office for a pseudonymous prediction market that listed contracts on whether named individuals would be doxxed, swatted, or exposed by specific dates. The operator brokered the services that settled those contracts, clearing the spread on his own positions.
+
+The objective was to identify the operator. The constraint: he never posted under a personal account. Every message attributable to him appeared under the channel persona "Hades Group" with `from_id` prefix `channel`. Twenty-five user accounts and one channel persona were active in the export.
+
+The intended solve was to attribute the channel persona to a single user account through stylistic and operational analysis, then walk that seed through a bot chain to a terminal document record.
+
+## Initial Reconnaissance
+
+Parsing the JSON gave the basic inventory:
+
+```python
+import json
+from collections import Counter
+
+data = json.load(open('hades_export.json'))
+
+# 400 messages, 384 user/channel posts + 16 service events
+# 25 distinct user accounts + 1 channel persona (channel28740651)
+
+from_ids = Counter(m.get('from_id') or m.get('actor_id') for m in data['messages'])
+# Top accounts by post count:
+#   channel28740651         46  (Hades Group)
+#   user7415839206          35  (mason h / @hermes_locker)
+#   user7520941836          29  (dani / @apollo_trace)
+#   user7682014550          29  (jian / @ares_forge)
+#   user7041885321          23  (forge / @hephaestus_drop)
+#   ...
+```
+
+The channel persona (`channel28740651`) accounts for 46 entries: 30 messages, 16 service events (pin, invite_members, remove_members). Those 30 channel messages are the corpus that had to be attributed to a user account.
+
+## Profiling the Channel's Voice
+
+Pulling all 30 channel messages and reading them sequentially produced a very consistent register:
+
+```
+#3   "Read pinned. No samples in main. Fresh accounts stay quiet until vouched."
+#4   "Broker requests go first. Do not improvise jurisdiction."
+#22  "No fresh handles get priority. Queue order stands."
+#57  "Kids get one warning."
+#59  "No live method talk in main. Take it to DM."
+#83  "If you do not know the local dispatch stack, do not touch the request."
+#91  "Escrow decides. Not the seller. Not the buyer. Escrow. Final."
+#264 "Rules. Have. Not. Changed."
+```
+
+Capitalised. Terminal punctuation. Imperative. No abbreviations. This is a constructed admin voice.
+
+Two messages did not match:
+
+```
+#94  "taking bookings for tmrw. US targets. dm me first name + state so ur 
+      in queue when it opens"
+#98  "stop posting names in main. use DMs for target info jfc"
+```
+
+Lowercase, no terminal discipline, texting abbreviations (`tmrw`, `ur`, `jfc`, `dm me`). These read as the operator composing in his personal register and dispatching without first checking which account was active. The OSINT objective reduced to: which user in the room writes like that, about those things?
+
+## Phrase-Level Attribution
+
+Searching all 400 messages for the distinctive constructions in the two slipped channel posts:
+
+```python
+def occurs_in(phrase):
+    for m in data['messages']:
+        t = (m.get('text') or '').lower()
+        if phrase in t:
+            yield m['id'], m.get('from'), m.get('from_username')
+
+list(occurs_in("taking bookings for tmrw"))
+# [(81,  'mason h', 'hermes_locker'),
+#  (94,  'Hades Group', None),               <-- channel slip
+#  (101, 'mason h', 'hermes_locker'),
+#  (360, 'mason h', 'hermes_locker')]
+
+list(occurs_in("first name + state"))
+# [(19, 'mason h', 'hermes_locker'),
+#  (94, 'Hades Group', None)]                <-- channel slip
+```
+
+Both distinctive phrases from the channel slip occur exclusively in posts from one user account: **`@hermes_locker`** (display name `mason h`, UID `7415839206`).
+
+The third slipped channel construction (`"no target info in main"` / `"stop posting names in main"`) is restated verbatim by `@hermes_locker` at #198 and #248, in the same imperative cadence, with the same claim of authority over the rule:
+
+```
+#198 hermes_locker: "no target info in main. DM only. rule #1. 
+                     not repeating this"
+#248 hermes_locker: "no target info in main. dm me name + state. 
+                     thats the only way i take ords"
+```
+
+The general lexical profile matches: lowercase composition, regular use of `dm me`, `tmrw`, `ur`, `thats`, `rn`, `b4`, terse declaratives, no terminal punctuation. The two slipped channel posts read as a sample drawn from `@hermes_locker`'s posting distribution.
+
+## Operational Corroboration
+
+Style attribution is most reliable when it converges with independent operational evidence. The channel-as-operator role is independently corroborated by `@hermes_locker`'s position in the group:
+
+**He is the entity orders are placed with.** Six other accounts tag him for orders, status checks, or pricing across the export. Examples:
+
+```
+#71  ath: "@hermes_locker do ur packs include the targets kids 
+           or is that off limits"
+#108 art: "@hermes_locker can u take my request tn? got the target 
+           info ready to send"
+#175 orion: "@hermes_locker u still clearing last wks queue? 
+             wondering if my ord got lost"
+```
+
+**He sets prices, ETAs, and regional data freshness** — operator notices, not seller pitches:
+
+```
+#118 hermes_locker: "east coast records r current as of yest. 
+                     west coast is like a wk behind"
+#152 hermes_locker: "adding relatives costs ~15 min per person on 
+                     top of base pack time. dm me details"
+#293 hermes_locker: "metro targets cost more cuz more records to xref. 
+                     ur paying for accuracy not effort"
+```
+
+**`@nyxrelay` broadcasts on his behalf**, in language consistent with the channel's own queue-management posts:
+
+```
+#393 nyx: "relaying from hermes: hes taking ords tn. 
+           east coast priority. dm him directly. dont ask in main"
+```
+
+**Vouches name him as the dox/dispatch service provider:**
+
+```
+#24  nyx: "vouch hermes btw. homie needed a streamer doxxed, got the 
+           whole family tree same day lol"
+#115 nyx: "vouch hermes. buddy needed a ytber doxxed, got full pack 
+           incl relatives same day"
+```
+
+When `@europa_vouch` asks for vouches before a "big ord," only two broker names are offered, and `@hermes_locker` is the dominant one (`#344`, `#374`).
+
+The channel and `@hermes_locker` are the same operator.
+
+---
+
+## The Pivot Artifact
+
+Searching the entire export for non-text artifacts:
+
+```python
+for m in data['messages']:
+    artifacts = {k: m[k] for k in 
+                 ('sticker_set_name','file','photo','file_name')
+                 if k in m}
+    if artifacts:
+        print(m['id'], m.get('from') or m.get('actor'), artifacts)
+
+# 56 Hades Group {'sticker_set_name': 'styx_reaction_pack', 
+#                 'file': 'stickers/styx_reaction_pack_001.webp'}
+```
+
+The entire 400-message export contains exactly one non-text artifact: a sticker posted by the channel persona itself at message #56, drawn from a pack named `styx_reaction_pack`. No other files, images, links, phone numbers, or email addresses appear anywhere in the corpus.
+
+This is the chain-starting pivot. Sticker pack creator metadata is queryable through `StickerSleuth_VZBHY_389YBot`, and the pack was posted from the channel account, which provides a creator-side confirmation of the operator's identity that does not depend on the linguistic analysis.
+
+## Investigative Chain Through the Bot Stack
+
+Pivots available from the export at this point:
+
+```
+Username:     hermes_locker
+Telegram UID: 7415839206
+Display name: mason h
+Sticker pack: styx_reaction_pack
+```
+
+These were walked through the provided bot stack in the following order:
+
+**Step 1 — Sticker pack provenance** (`StickerSleuth_VZBHY_389YBot`)
+
+```
+> /lookup styx_reaction_pack
+```
+
+Returns the pack creator's Telegram UID/username. Confirms the channel-to-operator link independently of the linguistic match.
+
+**Step 2 — Username history** (`SherlockTweaked_9VEZB_389YBot`)
+
+```
+> /lookup hermes_locker
+```
+
+Operators rarely begin life under a clean alias. Prior usernames returned here become additional pivot seeds for the remaining steps.
+
+**Step 3 — Phone enumeration** (`TGObserver_H6J3S_389YBot`)
+
+```
+> /lookup hermes_locker
+> /lookup <prior_handle_from_step_2>
+```
+
+Cached Telegram parsing databases routinely retain phone↔username pairs even after profile scrubbing.
+
+**Step 4 — Leak database cross-reference** (`QuickOSINTSearch_XGBXL_389YBot`, `EyeOfTheGod_ZF231_389YBot`)
+
+```
+> /lookup 7415839206
+> /lookup <phone_from_step_3>
+> /lookup hermes_locker
+```
+
+Both databases queried in parallel — different sources, different coverage. Returns real name, country of registration, and additional identifiers.
+
+**Step 5 — Document database** (one of `USDocs`, `RussiaSearch`, `ChinaSearch`, `CountrySearch`)
+
+```
+> /lookup <full_name_from_step_4>
+```
+
+Jurisdiction is determined by the country returned in step 4, not by the operator's stated target geography. The chat content is heavily US-operational (`east coast`, `west coast`, `county level`, `US only`, `school board`, `US targets`), and the display name `mason h` is consistent with a US-Anglo identity, making `USDocs_6C582_389YBot` the most likely terminal node — but US-targeted operations are routinely run from outside the US, and `CountrySearch_U6B8V_389YBot` should be used as a cross-check regardless.
+
+The terminal document bot returns a Document Record ID of the form `REC-9305174`.
+
+## Flag
+
+```
+UMDCTF{REC-9305174}
+```
+

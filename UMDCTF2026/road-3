@@ -1,0 +1,82 @@
+# UMDCTF — road-3
+
+
+  **Category** OSINT
+  **Flag**: `UMDCTF{Hanna, WY}`
+
+## Overview
+
+This challenge presented a single image: a screenshot from what appeared to be a remote traffic camera, showing an empty stretch of two-lane highway running through arid, rolling terrain. No EXIF metadata. No filename clue (the file was mislabeled with the wrong extension). The goal was to identify exactly where this camera was located.
+The challenge tested the patience-heavy side of OSINT — there's no clever trick, just systematic visual analysis followed by methodical browsing of public DOT camera networks.
+
+---
+
+## Initial Reconnaissance
+
+EXIF check came back empty — clean JPEG, no embedded coordinates or device data. That meant pure visual analysis from this point forward.
+Cataloguing every visible feature in the frame:
+
+Sagebrush steppe — vast, treeless arid grassland at apparent elevation
+Heavy tar crack-sealing on the road surface, indicating extreme freeze-thaw cycles
+Pole-mounted camera shadow in the bottom-right of the frame — confirms this is a fixed DOT installation, not a dashcam
+Fence posts running along the hillside — open-range ranch country
+Yellow diamond curve warning sign — standard US road signage
+No trees, no structures, no vehicles — extremely remote
+Distant buttes/mesas on the horizon
+
+The combination of high-elevation sagebrush, extreme freeze-thaw, a DOT camera, and open-range fencing pointed firmly at the Mountain West — most likely Wyoming, Montana, or eastern Colorado/Idaho.
+
+---
+
+## First Hypothesis: Wyoming
+
+Wyoming was the strongest initial candidate. WYDOT is known for maintaining cameras on extremely remote stretches of state and US highways — exactly the kind of stretch this image matched.
+Top candidate routes based on terrain match:
+
+WYO 28 at South Pass — high-elevation sagebrush near the Wind River Range (~7,500 ft)
+US 287 at Pumpkin Vine — open grassland south of Laramie
+US 191 near Farson / Sand Draw — high desert sagebrush
+WYO 220 at Pathfinder — open range west of the WYO 220/487 junction
+
+The standard methodology to narrow this: open WYDOT's interactive camera map at map.wyoroad.info, click through every camera on these routes, and match curve direction, hill slope, fence line angle, and shadow direction against the target image.
+
+---
+
+## Verification Failure
+
+None of the four candidate cameras (WYO 28, US 287, US 191, WYO 220) produced a visual match.
+This is the OSINT moment where the temptation is to keep doubling down on the original hypothesis. The terrain analysis was probably right (it WAS Wyoming) but the route shortlist was too narrow — anchored on the "famous" remote routes and skipping the rest of the network.
+
+Pivot: Broaden the Search Space
+Reset assumptions. The image could just as easily be:
+
+Montana — central MT along US 87, US 191, or US 12 east of Helena (MDT runs 73 RWIS cameras at app.mdt.mt.gov/atms/public/cameras)
+Colorado — the high plains east of the Front Range or the North Park region (cotrip.org)
+A Wyoming route not yet considered — US 20/26, US 85, US 189, US 30, WYO 59, WYO 387, WYO 789
+
+The lesson at this point: when systematic camera browsing isn't producing matches, the bottleneck is usually that text-based fetching can't actually load and visually compare hundreds of live camera feeds. This is browser-and-eyeballs work, not API work.
+
+---
+
+## The Solve
+
+The actual location turned out to be US 30, Hanna Junction - East, mile marker 252.8 — a Wyoming route that wasn't on the original candidate list. The terrain analysis was correct, the state was correct; the route guess was wrong because I'd anchored on the more iconic remote routes (WYO 28, US 287) and skipped US 30 entirely.
+The closest town is Hanna, Wyoming — a small community in Carbon County at approximately 41.854129° N, -106.548082° W.
+
+---
+
+## Lessons
+
+Visual terrain analysis works. Sagebrush + freeze-thaw + open range + DOT pole correctly narrowed to Wyoming on the first pass. The geographic call was right.
+Route shortlists are biased toward famous routes. US 30 is a major transcontinental highway but its central-Wyoming stretch through Carbon County isn't iconic the way South Pass is. That bias cost the solve.
+The bottleneck in DOT-camera geolocation is visual comparison, not data access. WYDOT publishes every camera; finding the right one is a human pattern-matching task across hundreds of frames.
+Reverse image search is worth trying first. Yandex handles landscape and traffic-camera frames better than Google. TinEye is a useful fallback. Either can occasionally short-circuit hours of manual browsing.
+In a 48-hour CTF, the solve is the patience, not the technique. Brute-force browsing the entire WYDOT non-interstate camera list would have produced the answer; restricting the shortlist felt efficient but actually slowed things down.
+
+---
+
+## Flag
+
+```
+UMDCTF{Hanna, WY}
+```
